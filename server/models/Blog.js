@@ -1,10 +1,11 @@
 const mongoose = require("mongoose");
 
 const commentSchema = new mongoose.Schema({
-       commentId: { type: String, unique: true, sparse: true },
-      userId: { type: String, required: true },
-      text: { type: String, required: true },
-      date: { type: Date, default: Date.now },
+  commentId: { type: String, unique: true, sparse: true },
+  userId: { type: String, required: true },
+  userName: { type: String, required: true },
+  text: { type: String },
+  date: { type: Date, default: Date.now },
 });
 
 const blogSchema = new mongoose.Schema({
@@ -20,7 +21,7 @@ const blogSchema = new mongoose.Schema({
     default: "information",
   },
   image: {
-    data: Buffer,        
+    data: Buffer,
     contentType: String,
   },
   comments: [commentSchema],

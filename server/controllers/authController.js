@@ -160,22 +160,19 @@ exports.logout = (req, res) => {
 
 exports.me = async (req, res) => {
   try {
-    const token = req.cookies?.token; // ✅ get token directly from cookies
+    const token = req.cookies?.token; 
     if (!token) {
       return res.json({ authenticated: false, message: "No token found" });
     }
 
-    // ✅ verify token validity
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // If verification passes, user is logged in
     return res.json({
       authenticated: true,
-      userId: decoded.id, // optional — include ID if needed
+      userId: decoded.id,
       message: "User is logged in",
     });
   } catch (err) {
-    // Token invalid or expired
     return res.json({
       authenticated: false,
       message: "Invalid or expired token",

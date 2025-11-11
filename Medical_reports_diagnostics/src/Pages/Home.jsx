@@ -9,7 +9,32 @@ export default function Home() {
   const [fileInputRef, setFileInputRef] = useState(null);
   const [blogs, setBlogs] = useState([]);
   const [selectedBlog, setSelectedBlog] = useState(null);
-  const [isHovered, setIsHovered] = useState(false)
+  const [isHovered, setIsHovered] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [commentText, setCommentText] = useState("");
+  const [commentRating, setCommentRating] = useState(0);
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await api.get("/auth/me", { withCredentials: true });
+        if (res.data.authenticated) {
+          setIsAuthenticated(true);
+          setUser(res.data.user);
+          console.log("Fetched user:", res.data.user);
+        } else {
+          setIsAuthenticated(false);
+          setUser(null);
+        }
+      } catch (err) {
+        setUser(null);
+      }
+    };
+    fetchUser();
+  }, []);
+
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -23,7 +48,6 @@ export default function Home() {
     const fetchBlogs = async () => {
       try {
         const res = await api.get("/blogs/all");
-        console.log("Fetched blogs:", res.data.blogs);
         setBlogs(res.data.blogs);
       } catch (err) {
         console.error(err);
@@ -31,6 +55,43 @@ export default function Home() {
     };
     fetchBlogs();
   }, []);
+
+  useEffect(() => {
+    const fetchComments = async () => {
+      if (!selectedBlog) return;
+      try {
+        const res = await api.get(`/blogs/${selectedBlog.blogId}/comments`);
+        setComments(res.data.comments || []);
+      } catch (err) {
+        console.error("Error fetching comments:", err);
+      }
+    };
+    fetchComments();
+  }, [selectedBlog]);
+
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    if (!commentText && commentRating === 0) return;
+
+    try {
+      await api.post(`/blogs/${selectedBlog.blogId}/comment`, {
+        text: commentText || null,
+        rating: commentRating || null,
+      });
+
+      setCommentText("");
+      setCommentRating(0);
+
+      const res = await api.get(`/blogs/${selectedBlog.blogId}/comments`);
+      setComments(res.data.comments || []);
+      const updatedBlogRes = await api.get(`/blogs/all`);
+      setBlogs(updatedBlogRes.data.blogs || []);
+    } catch (err) {
+      alert(err.response?.data?.message || "Please login to comment/rate.");
+    }
+  };
+
+
 
   const sanitizeQuillHtml = (html) => {
     return html.replace(/<span class="ql-ui" contenteditable="false"><\/span>/g, "");
@@ -79,31 +140,31 @@ export default function Home() {
     )
   }
 
-  const textVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: (i) => ({
-      opacity: 1,
-      y: 0,
-      transition: {
-        delay: i * 0.1,
-        duration: 0.8,
-        ease: "easeOut",
-      },
-    }),
-  }
+  // const textVariants = {
+  //   hidden: { opacity: 0, y: 20 },
+  //   visible: (i) => ({
+  //     opacity: 1,
+  //     y: 0,
+  //     transition: {
+  //       delay: i * 0.1,
+  //       duration: 0.8,
+  //       ease: "easeOut",
+  //     },
+  //   }),
+  // }
 
-  const orbitVariants = {
-    animate: (angle) => ({
-      x: Math.cos(angle) * 120,
-      y: Math.sin(angle) * 120,
-      rotate: angle,
-      transition: {
-        duration: 20,
-        repeat: Number.POSITIVE_INFINITY,
-        ease: "linear",
-      },
-    }),
-  }
+  // const orbitVariants = {
+  //   animate: (angle) => ({
+  //     x: Math.cos(angle) * 120,
+  //     y: Math.sin(angle) * 120,
+  //     rotate: angle,
+  //     transition: {
+  //       duration: 20,
+  //       repeat: Number.POSITIVE_INFINITY,
+  //       ease: "linear",
+  //     },
+  //   }),
+  // }
 
   const morphVariants = {
     animate: {
@@ -134,17 +195,17 @@ export default function Home() {
     }),
   }
 
-  const pulseWaveVariants = {
-    animate: {
-      scale: [1, 2, 3],
-      opacity: [1, 0.5, 0],
-      transition: {
-        duration: 2,
-        repeat: Number.POSITIVE_INFINITY,
-        ease: "easeOut",
-      },
-    },
-  }
+  // const pulseWaveVariants = {
+  //   animate: {
+  //     scale: [1, 2, 3],
+  //     opacity: [1, 0.5, 0],
+  //     transition: {
+  //       duration: 2,
+  //       repeat: Number.POSITIVE_INFINITY,
+  //       ease: "easeOut",
+  //     },
+  //   },
+  // }
 
   const floatingCardVariants = {
     animate: {
@@ -575,7 +636,23 @@ export default function Home() {
                   />
                 )}
 
-                <h2 className="text-2xl font-bold mb-2">{selectedBlog.title}</h2>
+                <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
+                  {selectedBlog.title}
+                  <span className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span
+                        key={star}
+                        className={`text-xl ${star <= Math.round(selectedBlog.avgRating || selectedBlog.rating || 0) ? "text-yellow-400" : "text-gray-300"}`}
+                      >
+                        ★
+                      </span>
+                    ))}
+                    <span className="ml-2 text-gray-700 text-lg">
+                      ({selectedBlog.avgRating || selectedBlog.rating || 0})
+                    </span>
+                  </span>
+                </h2>
+
                 <p className="text-gray-500 mb-2">
                   Posted on: {new Date(selectedBlog.date).toLocaleString()}
                 </p>
@@ -587,8 +664,54 @@ export default function Home() {
                     __html: sanitizeQuillHtml(selectedBlog.description),
                   }}
                 />
+                <div className="mt-4">
+                  <h3 className="text-xl font-semibold mb-2">Comments</h3>
 
-                <p className="font-semibold">⭐ {selectedBlog.rating || 0}</p>
+                  {isAuthenticated ? (
+                    <form onSubmit={handleCommentSubmit} className="mb-4 space-y-2">
+                      <textarea
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        placeholder="Write your comment..."
+                        className="w-full border rounded px-3 py-2"
+                      />
+                      <div className="flex items-center gap-2">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <span
+                            key={star}
+                            onClick={() => setCommentRating(star)}
+                            className={`cursor-pointer text-2xl ${star <= commentRating ? "text-yellow-400" : "text-gray-300"}`}
+                          >
+                            ★
+                          </span>
+                        ))}
+                      </div>
+                      <button
+                        type="submit"
+                        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+                      >
+                        Submit
+                      </button>
+                    </form>
+                  ) : (
+                    <p className="text-gray-500 mb-4">
+                      Please <span className="font-semibold">login</span> to comment or rate.
+                    </p>
+                  )}
+
+                  {/* Comments list */}
+                  <div className="space-y-3 max-h-48 overflow-y-auto">
+                    {comments.length === 0 && <p className="text-gray-400">No comments yet</p>}
+                    {comments.map((c) => (
+                      <div key={c.commentId} className="border-b pb-2">
+                        <p className="font-semibold">{c.userName}</p>
+                        {c.text && <p>{c.text}</p>}
+                        {c.rating != null && <p>⭐ {c.rating}</p>}
+                        <p className="text-gray-400 text-sm">{new Date(c.date).toLocaleString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </motion.div>
             </motion.div>
           )}
