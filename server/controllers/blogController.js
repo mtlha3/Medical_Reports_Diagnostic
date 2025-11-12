@@ -114,27 +114,34 @@ exports.getBlogsByUser = async (req, res) => {
 };
 
 // GET ALL BLOGS
+
 exports.getAllBlogs = async (req, res) => {
   try {
     const blogs = await Blog.find().sort({ date: -1 });
 
-    const blogsWithImages = blogs.map(blog => {
+    const blogsWithImagesAndRating = blogs.map((blog) => {
       let image = null;
       if (blog.image && blog.image.data) {
         image = `data:${blog.image.contentType};base64,${blog.image.data.toString('base64')}`;
       }
+
+      const ratings = blog.ratings?.map(r => r.rating) || [];
+      const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+
       return {
         ...blog.toObject(),
-        image
+        image,
+        avgRating,
       };
     });
 
-    res.status(200).json({ message: "All blogs fetched successfully.", blogs: blogsWithImages });
+    res.status(200).json({ message: "All blogs fetched successfully.", blogs: blogsWithImagesAndRating });
   } catch (error) {
     console.error("Error fetching all blogs:", error);
     res.status(500).json({ message: "Server error while fetching all blogs." });
   }
 };
+
 
 
 
@@ -158,6 +165,7 @@ exports.addCommentOrRating = async (req, res) => {
     const blog = await Blog.findOne({ blogId });
     if (!blog) return res.status(404).json({ message: "Blog not found" });
 
+    // Add comment
     if (text) {
       blog.comments.push({
         commentId: uuidv4(),
@@ -167,6 +175,7 @@ exports.addCommentOrRating = async (req, res) => {
       });
     }
 
+    // Add or update rating
     if (rating != null) {
       rating = Number(rating);
       if (isNaN(rating)) return res.status(400).json({ message: "Rating must be a number" });
@@ -175,13 +184,13 @@ exports.addCommentOrRating = async (req, res) => {
       blog.ratings = blog.ratings || [];
       const existingIndex = blog.ratings.findIndex(r => r.userId === userId);
       if (existingIndex > -1) {
-        blog.ratings[existingIndex].rating = rating; 
+        blog.ratings[existingIndex].rating = rating;
       } else {
-        blog.ratings.push({ userId, rating }); 
+        blog.ratings.push({ userId, rating });
       }
 
       const allRatings = blog.ratings.map(r => r.rating);
-      blog.rating = Math.round((allRatings.reduce((a, b) => a + b, 0) / allRatings.length) * 10) / 10;
+      blog.rating = Math.round((allRatings.reduce((a, b) => a + b, 0) / allRatings.length) * 10) / 10; // avgRating rounded to 1 decimal
     }
 
     await blog.save();
@@ -200,6 +209,18 @@ exports.addCommentOrRating = async (req, res) => {
 exports.getBlogComments = async (req, res) => {
   try {
     const { blogId } = req.params;
+    const token = req.cookies?.token;
+    let userId = null;
+
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        userId = decoded.userId;
+      } catch {
+        userId = null;
+      }
+    }
+
     const blog = await Blog.findOne({ blogId });
     if (!blog) return res.status(404).json({ message: "Blog not found" });
 
@@ -208,11 +229,19 @@ exports.getBlogComments = async (req, res) => {
       userId: c.userId,
       userName: c.userName,
       text: c.text || null,
-      rating: c.rating || null,
       date: c.date,
     }));
 
-    res.status(200).json({ comments, avgRating: blog.rating });
+    const userRating =
+      userId && blog.ratings
+        ? blog.ratings.find(r => r.userId === userId)?.rating || null
+        : null;
+
+    res.status(200).json({
+      comments,
+      avgRating: blog.rating, // average of all ratings
+      userRating,             // logged-in user's rating
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });

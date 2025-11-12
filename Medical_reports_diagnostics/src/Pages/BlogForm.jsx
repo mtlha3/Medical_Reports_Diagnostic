@@ -20,15 +20,6 @@ const BlogPage = () => {
   })
   const [message, setMessage] = useState("")
   const [cardIndices, setCardIndices] = useState({})
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      setMousePosition({ x: e.clientX, y: e.clientY })
-    }
-    window.addEventListener("mousemove", handleMouseMove)
-    return () => window.removeEventListener("mousemove", handleMouseMove)
-  }, [])
 
   const handleImageChange = (e) => setFormData({ ...formData, image: e.target.files[0] })
 
@@ -107,7 +98,6 @@ const BlogPage = () => {
     try {
       const res = await api.get("/blogs/user")
       setBlogs(res.data.blogs)
-      // Initialize card indices
       const indices = {}
       res.data.blogs.forEach((_, i) => {
         indices[i] = 0
@@ -157,9 +147,9 @@ const BlogPage = () => {
       return {
         opacity: 1,
         scale: 1 - custom * 0.08,
-        y: custom * 24, // Increased offset to show all 3 cards clearly
-        x: custom * 12, // Horizontal offset for depth
-        rotateZ: custom * 1.5, // Slight rotation for visual appeal
+        y: custom * 24,
+        x: custom * -12, // changed to negative to shift cards left instead of right
+        rotateZ: custom * -5, // changed to negative rotation for top-left tilt
         zIndex: 100 - custom,
         transition: {
           duration: 0.4,
@@ -182,7 +172,6 @@ const BlogPage = () => {
 
     setBlogs((prev) => {
       const newBlogs = [...prev]
-      // Move first card to end
       const card = newBlogs.shift()
       newBlogs.push(card)
       return newBlogs
@@ -192,39 +181,43 @@ const BlogPage = () => {
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative overflow-hidden">
       <motion.div
-        className="absolute -top-40 -right-40 w-96 h-96 bg-cyan-500/15 rounded-full filter blur-3xl pointer-events-none"
+        className="absolute -top-40 -right-40 w-96 h-96 bg-cyan-500/10 rounded-full pointer-events-none"
         animate={{
-          x: [0, 50, 0],
-          y: [0, 100, 0],
+          x: [0, 30, 0],
+          y: [0, 50, 0],
         }}
         transition={{
-          duration: 8,
+          duration: 10,
           repeat: Number.POSITIVE_INFINITY,
           ease: "easeInOut",
         }}
       />
       <motion.div
-        className="absolute -bottom-40 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full filter blur-3xl pointer-events-none"
+        className="absolute -bottom-40 -left-40 w-96 h-96 bg-emerald-500/5 rounded-full pointer-events-none"
         animate={{
-          x: mousePosition.x - 192,
-          y: mousePosition.y - 192,
+          x: [0, 20, 0],
+          y: [0, 40, 0],
         }}
-        transition={{ type: "spring", damping: 3, mass: 0.2 }}
+        transition={{
+          duration: 12,
+          repeat: Number.POSITIVE_INFINITY,
+          ease: "easeInOut",
+        }}
       />
 
-      {[...Array(6)].map((_, i) => (
+      {[...Array(3)].map((_, i) => (
         <motion.div
           key={i}
           className="absolute w-1 h-1 bg-cyan-400 rounded-full pointer-events-none"
           animate={{
-            y: [0, -200, 0],
-            x: [0, Math.random() * 100 - 50, 0],
-            opacity: [0, 0.8, 0],
+            y: [0, -150, 0],
+            x: [0, Math.random() * 50 - 25, 0],
+            opacity: [0, 0.5, 0],
           }}
           transition={{
-            duration: 4 + i,
+            duration: 5 + i,
             repeat: Number.POSITIVE_INFINITY,
-            delay: i * 0.5,
+            delay: i * 1,
           }}
           style={{
             left: `${Math.random() * 100}%`,
@@ -232,15 +225,6 @@ const BlogPage = () => {
           }}
         />
       ))}
-
-      <motion.div
-        className="fixed pointer-events-none w-96 h-96 bg-cyan-400/5 rounded-full filter blur-3xl -z-5"
-        animate={{
-          x: mousePosition.x - 192,
-          y: mousePosition.y - 192,
-        }}
-        transition={{ type: "spring", damping: 3, mass: 0.2 }}
-      />
 
       <div className="relative z-10">
         <div className="flex items-center justify-between px-6 lg:px-12 py-8 border-b border-cyan-400/10">
@@ -343,37 +327,38 @@ const BlogPage = () => {
                       }}
                     >
                       <motion.div
-                        className="h-full rounded-3xl bg-gradient-to-br from-slate-800/90 to-slate-900/90 border-2 border-cyan-400/30 backdrop-blur-xl p-8 flex flex-col justify-between overflow-hidden relative cursor-pointer group"
-                        onClick={() => setSelectedBlog(blog)}
-                        whileHover={{ borderColor: "rgba(34, 197, 94, 0.8)", scale: 1.02 }}
+                        className="h-full rounded-3xl bg-gradient-to-br from-slate-800/90 to-slate-900/90 border-2 border-cyan-400/30 backdrop-blur-xl p-8 flex flex-col justify-between overflow-hidden relative"
+                        whileHover={{ borderColor: "rgba(34, 197, 94, 0.8)" }}
                       >
                         <motion.div
-                          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none"
+                          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none"
                           animate={{ x: ["100%", "-100%"] }}
-                          transition={{ duration: 3, repeat: Number.POSITIVE_INFINITY }}
+                          transition={{ duration: 4, repeat: Number.POSITIVE_INFINITY }}
                         />
 
                         {blog.image && (
                           <motion.div
-                            className="mb-6 rounded-2xl overflow-hidden h-48 bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 relative z-10"
+                            className="mb-6 rounded-2xl overflow-hidden h-48 bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 relative z-10 cursor-pointer"
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ duration: 0.4 }}
+                            onClick={() => setSelectedBlog(blog)}
                           >
                             <img
                               src={blog.image || "/placeholder.svg"}
                               alt={blog.title}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-contain" // changed from object-cover to object-contain to show full image
                             />
                           </motion.div>
                         )}
 
                         <div className="flex-1 relative z-10">
                           <motion.h2
-                            className="text-2xl font-bold text-white mb-2 line-clamp-2 group-hover:text-cyan-300 transition-colors"
+                            className="text-2xl font-bold text-white mb-2 line-clamp-2 cursor-pointer hover:text-cyan-300 transition-colors"
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.4, delay: 0.1 }}
+                            onClick={() => setSelectedBlog(blog)}
                           >
                             {blog.title}
                           </motion.h2>
@@ -484,26 +469,20 @@ const BlogPage = () => {
       <AnimatePresence>
         {showForm && (
           <motion.div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 px-4 py-6"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 px-4 py-6 overflow-y-auto"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setShowForm(false)}
           >
             <motion.div
-              className="bg-gradient-to-br from-slate-800/95 to-slate-900/95 rounded-3xl shadow-2xl border border-cyan-400/30 w-full max-w-2xl max-h-[85vh] overflow-y-auto relative mt-20"
+              className="bg-gradient-to-br from-slate-800/95 to-slate-900/95 rounded-3xl shadow-2xl border border-cyan-400/30 w-full max-w-2xl max-h-[90vh] overflow-y-auto relative mt-24"
               initial={{ scale: 0.8, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.8, opacity: 0, y: 20 }}
               transition={{ type: "spring", stiffness: 200, damping: 25 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent pointer-events-none"
-                animate={{ x: ["100%", "-100%"] }}
-                transition={{ duration: 3, repeat: Number.POSITIVE_INFINITY }}
-              />
-
               <motion.button
                 className="absolute top-6 right-6 z-10 p-2 bg-slate-700/50 hover:bg-slate-600 rounded-lg transition-colors"
                 onClick={() => setShowForm(false)}
@@ -523,7 +502,7 @@ const BlogPage = () => {
                   <h2 className="text-3xl font-bold bg-gradient-to-r from-cyan-300 to-emerald-300 bg-clip-text text-transparent mb-2">
                     {editingBlog ? "Edit Your Blog" : "Create a New Blog"}
                   </h2>
-                  <p className="text-slate-400">Share your medical insights and expertise</p>
+                  <p className="text-slate-300">Share your medical insights and expertise</p>
                 </motion.div>
 
                 {message && (
@@ -582,14 +561,34 @@ const BlogPage = () => {
                     transition={{ duration: 0.4, delay: 0.2 }}
                   >
                     <label className="block text-sm font-semibold text-cyan-300 mb-2">Description</label>
-                    <div className="bg-slate-700/50 rounded-xl overflow-hidden border border-cyan-400/20 focus-within:ring-2 focus-within:ring-cyan-500">
+                    <div className="bg-slate-700/50 rounded-xl overflow-hidden border border-cyan-400/20 focus-within:ring-2 focus-within:ring-cyan-500 quill-white-theme">
+                      <style>{`
+                        .quill-white-theme .ql-toolbar {
+                          background-color: rgba(51, 65, 85, 0.5) !important;
+                          border: none !important;
+                        }
+                        .quill-white-theme .ql-toolbar.ql-snow .ql-picker-label,
+                        .quill-white-theme .ql-toolbar.ql-snow .ql-stroke,
+                        .quill-white-theme .ql-toolbar.ql-snow .ql-fill {
+                          color: white !important;
+                        }
+                        .quill-white-theme .ql-toolbar.ql-snow .ql-picker {
+                          color: white !important;
+                        }
+                        .quill-white-theme .ql-editor {
+                          min-height: 200px;
+                          color: white !important;
+                        }
+                        .quill-white-theme .ql-editor.ql-blank::before {
+                          color: rgba(148, 163, 184, 0.7) !important;
+                        }
+                      `}</style>
                       <ReactQuill
                         value={formData.description}
                         onChange={handleQuillChange}
                         modules={quillModules}
                         formats={quillFormats}
                         placeholder="Write your blog description here..."
-                        className="h-48 text-white"
                         theme="snow"
                       />
                     </div>
@@ -654,14 +653,14 @@ const BlogPage = () => {
       <AnimatePresence>
         {selectedBlog && (
           <motion.div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 px-4 py-6"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 px-4 py-6 overflow-y-auto"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setSelectedBlog(null)}
           >
             <motion.div
-              className="bg-gradient-to-br from-slate-800/95 to-slate-900/95 rounded-3xl shadow-2xl border border-cyan-400/30 w-full max-w-2xl max-h-[85vh] overflow-y-auto relative mt-20"
+              className="bg-gradient-to-br from-slate-800/95 to-slate-900/95 rounded-3xl shadow-2xl border border-cyan-400/30 w-full max-w-2xl max-h-[90vh] overflow-y-auto relative mt-24"
               initial={{ scale: 0.8, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.8, opacity: 0, y: 20 }}

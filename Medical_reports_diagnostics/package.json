@@ -24,6 +24,8 @@
     "react-dom": "^19.2.0",
     "react-quill-new": "^3.6.0",
     "react-router-dom": "^7.9.5",
+    "react-slick": "^0.31.0",
+    "slick-carousel": "^1.8.1",
     "sweetalert2": "^11.26.3"
   },
   "devDependencies": {
