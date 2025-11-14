@@ -5,6 +5,8 @@ import ForgotPassword from "./Pages/ForgotPassword";
 import Nav from "./components/Nav";
 import Home from "./Pages/Home";
 import BlogForm from "./Pages/BlogForm";
+import Dashboard from "./Pages/Dashboard";
+import AnalysisPage from "./Pages/AnalysisPage";
 
 function App() {
   return (<>
@@ -16,6 +18,8 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/blogs" element={<BlogForm />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/analysis" element={<AnalysisPage />} />
       </Routes>
     </Router>
   </>
