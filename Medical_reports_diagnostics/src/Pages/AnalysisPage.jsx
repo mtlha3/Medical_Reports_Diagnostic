@@ -1,15 +1,17 @@
 'use client'
-
+import ReactMarkdown from "react-markdown";
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Brain, Bone, Heart, Zap, Send, Upload, X, ChevronDown, ChevronUp, Settings } from 'lucide-react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import remarkGfm from "remark-gfm";
 import api from '../api/api'
 
 const AnalysisPage = () => {
   const [searchParams, setSearchParams] = useSearchParams()
   const modelId = searchParams.get('model') || 'brain'
   const navigate = useNavigate()
+  const [previewImage, setPreviewImage] = useState(null);
 
   const [messages, setMessages] = useState([])
   const [inputValue, setInputValue] = useState('')
@@ -74,38 +76,88 @@ const AnalysisPage = () => {
       reader.readAsDataURL(file)
     }
   }
+  const formatBrainReport = (api) => {
+    if (!api) return "⚠️ No response received.";
+
+    const r = api.report?.report || {};
+
+    const tumorType = r.predicted_tumor_type || "N/A";
+    const confidence = r.confidence || 0;
+    const size = r.tumor_size_cm2 || "N/A";
+    const stage = r.stage || "N/A";
+    const stageExplanation = r.stage_explanation || "No stage explanation available.";
+
+    const treatments =
+      Array.isArray(r.treatments) && r.treatments.length > 0
+        ? r.treatments
+          .map((t) => `| ${t.Stage} | ${t.Treatment} | ${t.Explanation} |`)
+          .join("\n")
+        : "No treatment data found.";
+
+    return `
+===== 🧠 MRI SCAN REPORT =====
+
+📌 Predicted Tumor Type: **${tumorType}**
+📊 Prediction Confidence: **${confidence.toFixed(2)}%**
+
+🟦 Estimated Tumor Size: **${size} cm²**
+
+🩸 Suggested Stage: **${stage}**
+${stageExplanation}
+
+===============================
+🩺 TREATMENT OPTIONS SUMMARY
+===============================
+
+| Stage | Treatment | Notes |
+|-------|-----------|-------|
+${treatments}
+
+📘 Explanation Summary
+${stageExplanation}
+
+✅ Report generation complete.
+`;
+  };
 
   const handleSendMessage = async () => {
-    if (!inputValue.trim() && !selectedImage) return
+    if (!selectedImage) return;
 
-    const userMessage = {
-      id: Date.now(),
-      type: 'user',
-      content: inputValue,
-      image: selectedImage,
-      model: modelId,
-      timestamp: new Date(),
-    }
+    setIsLoading(true);
 
-    setMessages([...messages, userMessage])
-    setInputValue('')
-    setSelectedImage(null)
-    setIsLoading(true)
+    const formData = new FormData();
+    formData.append("image", fileInputRef.current.files[0]);
 
-    // Simulate API call to analysis backend
-    setTimeout(() => {
-      const analysisResult = {
-        id: Date.now() + 1,
-        type: 'analysis',
-        content: `Analysis Result for ${currentModel.name}:\n\nBased on the uploaded image, our AI model has completed the analysis. The results show:\n\n• Confidence Level: 94.5%\n• Key Findings: Normal\n• Recommendations: Continue regular checkups\n\nThis is a simulated analysis. Connect your backend API for real analysis.`,
+    try {
+      const response = await api.post("/predict", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const { report, gradcam_image } = response.data;
+
+      console.log("FULL API RESPONSE:", response.data);
+
+
+
+      const resultMessage = {
+        id: Date.now(),
+        type: "analysis",
+        content: formatBrainReport(response.data),
+        image: `data:image/png;base64,${gradcam_image}`,
         model: modelId,
         timestamp: new Date(),
-        confidence: 94.5,
-      }
-      setMessages((prev) => [...prev, analysisResult])
-      setIsLoading(false)
-    }, 2000)
-  }
+      };
+
+      setMessages((prev) => [...prev, resultMessage]);
+    } catch (error) {
+      console.error("Brain API failed:", error);
+      alert("Analysis failed. Please try again.");
+    }
+
+    setSelectedImage(null);
+    setIsLoading(false);
+  };
+
 
   const handleModelChange = (modelId) => {
     setSearchParams({ model: modelId })
@@ -133,9 +185,8 @@ const AnalysisPage = () => {
       <motion.div
         initial={{ x: -400 }}
         animate={{ x: 0 }}
-        className={`${
-          sidebarOpen ? 'w-80' : 'w-20'
-        } bg-slate-900/80 backdrop-blur-sm border-r border-slate-700 flex flex-col transition-all duration-300 relative z-20`}
+        className={`${sidebarOpen ? 'w-80' : 'w-20'
+          } bg-slate-900/80 backdrop-blur-sm border-r border-slate-700 flex flex-col transition-all duration-300 relative z-20`}
       >
         {/* Toggle Button */}
         <motion.button
@@ -175,11 +226,10 @@ const AnalysisPage = () => {
                 onClick={() => handleModelChange(model.id)}
                 whileHover={{ scale: 1.05, x: 5 }}
                 whileTap={{ scale: 0.95 }}
-                className={`w-full text-left p-4 rounded-xl transition-all ${
-                  isActive
-                    ? `bg-gradient-to-r ${model.color} text-white`
-                    : 'bg-slate-800/50 hover:bg-slate-800 text-slate-300 border border-slate-700'
-                }`}
+                className={`w-full text-left p-4 rounded-xl transition-all ${isActive
+                  ? `bg-gradient-to-r ${model.color} text-white`
+                  : 'bg-slate-800/50 hover:bg-slate-800 text-slate-300 border border-slate-700'
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <ModelIcon size={20} />
@@ -257,22 +307,30 @@ const AnalysisPage = () => {
                   className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-md px-6 py-4 rounded-2xl ${
-                      message.type === 'user'
-                        ? 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-semibold'
-                        : `bg-slate-800/80 border border-${currentModel.id}-400/30 text-slate-200`
-                    }`}
+                    className={`max-w-md px-6 py-4 rounded-2xl ${message.type === 'user'
+                      ? 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 font-semibold'
+                      : `bg-slate-800/80 border border-${currentModel.id}-400/30 text-slate-200`
+                      }`}
                   >
                     {message.image && (
                       <motion.img
                         src={message.image}
                         alt="uploaded"
-                        className="w-full h-48 object-cover rounded-lg mb-3"
+                        className="w-full h-48 object-contain rounded-lg mb-3 cursor-pointer"
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
+                        onClick={() => setPreviewImage(message.image)}
                       />
+
                     )}
-                    <p className="whitespace-pre-wrap text-sm">{message.content}</p>
+                    <div className="prose prose-invert max-w-none prose-headings:text-white prose-p:text-gray-200 prose-strong:text-white prose-table:border-collapse prose-table:w-full prose-th:border prose-th:border-gray-600 prose-td:border prose-td:border-gray-700 prose-th:bg-gray-800 prose-td:bg-gray-900 prose-tr:even:bg-gray-800 prose-tr:hover:bg-gray-700/50 p-4">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+
+
+
                     {message.confidence && (
                       <div className="mt-3 pt-3 border-t border-slate-600">
                         <p className={`text-xs ${currentModel.accentColor}`}>
@@ -307,6 +365,23 @@ const AnalysisPage = () => {
             </>
           )}
         </div>
+
+
+        {previewImage && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+            onClick={() => setPreviewImage(null)}
+          >
+            <motion.img
+              src={previewImage}
+              alt="preview"
+              className="max-w-[90%] max-h-[90%] rounded-lg"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+            />
+          </div>
+        )}
+
 
         {/* Input Area */}
         <motion.div
@@ -349,13 +424,6 @@ const AnalysisPage = () => {
               <Upload size={20} />
             </motion.button>
 
-            <textarea
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Describe your analysis or ask a question..."
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-6 py-4 text-slate-100 placeholder-slate-500 focus:border-cyan-400 outline-none resize-none max-h-24"
-              rows="1"
-            />
 
             <motion.button
               onClick={handleSendMessage}

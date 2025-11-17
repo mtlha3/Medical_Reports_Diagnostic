@@ -4,6 +4,7 @@ const connectDB = require("./db/db");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const blogRoutes = require("./routes/blogRoutes");
+const Brain_MRIRoutes = require("./routes/Brain_MRIRoutes");
 
 dotenv.config();
 connectDB();
@@ -19,6 +20,8 @@ app.use(cors({
 
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/blogs", blogRoutes);
+app.use("/api", Brain_MRIRoutes );
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
