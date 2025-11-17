@@ -120,43 +120,50 @@ ${stageExplanation}
 `;
   };
 
-  const handleSendMessage = async () => {
-    if (!selectedImage) return;
+const handleSendMessage = async () => {
+  if (!selectedImage) return;
 
-    setIsLoading(true);
-
-    const formData = new FormData();
-    formData.append("image", fileInputRef.current.files[0]);
-
-    try {
-      const response = await api.post("/predict", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      const { report, gradcam_image } = response.data;
-
-      console.log("FULL API RESPONSE:", response.data);
-
-
-
-      const resultMessage = {
-        id: Date.now(),
-        type: "analysis",
-        content: formatBrainReport(response.data),
-        image: `data:image/png;base64,${gradcam_image}`,
-        model: modelId,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, resultMessage]);
-    } catch (error) {
-      console.error("Brain API failed:", error);
-      alert("Analysis failed. Please try again.");
-    }
-
-    setSelectedImage(null);
-    setIsLoading(false);
+  const userMessage = {
+    id: Date.now(),
+    type: "user",
+    content: "Uploaded Image",
+    image: selectedImage,
+    timestamp: new Date(),
   };
+
+  setMessages((prev) => [...prev, userMessage]);
+  setIsLoading(true);
+
+  const formData = new FormData();
+  formData.append("image", fileInputRef.current.files[0]);
+  formData.append("model_id", modelId);
+
+  try {
+    const response = await api.post("/predict", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    const { report, gradcam_image } = response.data;
+
+    const resultMessage = {
+      id: Date.now(),
+      type: "analysis",
+      content: formatBrainReport(response.data),
+      image: `data:image/png;base64,${gradcam_image}`,
+      model: modelId,
+      timestamp: new Date(),
+    };
+
+    setMessages((prev) => [...prev, resultMessage]);
+  } catch (error) {
+    console.error("API failed:", error);
+    alert("Analysis failed. Please try again.");
+  }
+
+  setSelectedImage(null);
+  setIsLoading(false);
+};
+
 
 
   const handleModelChange = (modelId) => {
@@ -164,6 +171,28 @@ ${stageExplanation}
   }
 
   const IconComponent = currentModel.icon
+
+  useEffect(() => {
+  const fetchConversation = async () => {
+    try {
+      const response = await api.get(`/conversation?model=${modelId}`, {
+        withCredentials: true, 
+      });
+
+      if (response.data?.messages) {
+        setMessages(response.data.messages.map((msg) => ({
+          ...msg,
+          id: msg._id || Date.now() + Math.random(),
+        })));
+      }
+    } catch (err) {
+      console.log("No previous conversation or not logged in.", err);
+    }
+  };
+
+  fetchConversation();
+}, [modelId]);
+
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex overflow-hidden">

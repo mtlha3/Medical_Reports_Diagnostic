@@ -1,23 +1,144 @@
+// const axios = require("axios");
+// const FormData = require("form-data");
+// const multer = require("multer");
+
+// const upload = multer({ storage: multer.memoryStorage() });
+
+// exports.uploadMiddleware = upload.single("image");
+
+// // ---------------- CONTROLLER FUNCTION ----------------
+// exports.predictImage = async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({ error: "No image uploaded" });
+//     }
+
+//     const form = new FormData();
+//     form.append("image", req.file.buffer, {
+//       filename: req.file.originalname || "upload.jpg",
+//       contentType: req.file.mimetype,
+//       knownLength: req.file.size
+//     });
+
+//     const flaskURL = "http://127.0.0.1:5000/predict_full";
+
+//     const response = await axios.post(flaskURL, form, {
+//       headers: form.getHeaders(),
+//       maxContentLength: Infinity,
+//       maxBodyLength: Infinity,
+//     });
+
+//     return res.status(200).json(response.data);
+//   } catch (err) {
+//     console.error("Error forwarding to Flask:", err.message);
+
+//     if (err.response && err.response.data) {
+//       return res.status(err.response.status).json(err.response.data);
+//     }
+
+//     return res.status(500).json({ error: "Error connecting to Flask API" });
+//   }
+// };
+
+
+
 const axios = require("axios");
 const FormData = require("form-data");
 const multer = require("multer");
+const jwt = require("jsonwebtoken");
+const Conversation = require("../models/Conversation");
 
 const upload = multer({ storage: multer.memoryStorage() });
-
 exports.uploadMiddleware = upload.single("image");
+
+const formatBrainReport = (api) => {
+  if (!api?.report?.report) return "⚠️ No response received.";
+
+  const r = api.report.report;
+
+  const tumorType = r.predicted_tumor_type || "N/A";
+  const confidence = r.confidence || 0;
+  const size = r.tumor_size_cm2 || "N/A";
+  const stage = r.stage || "N/A";
+  const stageExplanation = r.stage_explanation || "No stage explanation available.";
+
+  const treatments =
+    Array.isArray(r.treatments) && r.treatments.length > 0
+      ? r.treatments
+        .map((t) => `| ${t.Stage} | ${t.Treatment} | ${t.Explanation} |`)
+        .join("\n")
+      : "No treatment data found.";
+
+  return `
+===== 🧠 MRI SCAN REPORT =====
+
+📌 Predicted Tumor Type: **${tumorType}**
+📊 Prediction Confidence: **${confidence.toFixed(2)}%**
+
+🟦 Estimated Tumor Size: **${size} cm²**
+
+🩸 Suggested Stage: **${stage}**
+${stageExplanation}
+
+===============================
+🩺 TREATMENT OPTIONS SUMMARY
+===============================
+
+| Stage | Treatment | Notes |
+|-------|-----------|-------|
+${treatments}
+
+📘 Explanation Summary
+${stageExplanation}
+
+✅ Report generation complete.
+`;
+};
 
 // ---------------- CONTROLLER FUNCTION ----------------
 exports.predictImage = async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No image uploaded" });
+    if (!req.file) return res.status(400).json({ error: "No image uploaded" });
+
+    let userId = "guest_user"; 
+    const token = req.cookies?.token;
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (decoded.userId) userId = decoded.userId;
+      } catch (err) {
+        console.log("Invalid token, using guest user");
+      }
     }
+
+    const model_id = req.body.model_id || req.query.model || "brain";
+
+    const userMessage = {
+      type: "user",
+      content: "Uploaded Image",
+      image: `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`,
+      timestamp: new Date(),
+    };
+
+    let conversation = await Conversation.findOne({ userId, model_id }).sort({ createdAt: -1 });
+
+    if (!conversation) {
+      conversation = new Conversation({
+        userId,
+        model_id,
+        messages: [userMessage],
+      });
+    } else {
+      conversation.messages.push(userMessage);
+    }
+
+    await conversation.save();
 
     const form = new FormData();
     form.append("image", req.file.buffer, {
       filename: req.file.originalname || "upload.jpg",
       contentType: req.file.mimetype,
-      knownLength: req.file.size
+      knownLength: req.file.size,
     });
 
     const flaskURL = "http://127.0.0.1:5000/predict_full";
@@ -28,14 +149,52 @@ exports.predictImage = async (req, res) => {
       maxBodyLength: Infinity,
     });
 
-    return res.status(200).json(response.data);
-  } catch (err) {
-    console.error("Error forwarding to Flask:", err.message);
+    const { report, gradcam_image } = response.data;
 
-    if (err.response && err.response.data) {
-      return res.status(err.response.status).json(err.response.data);
+    const formattedReport = formatBrainReport(response.data);
+
+    const botMessage = {
+      type: "analysis",
+      content: formattedReport,
+      image: `data:image/png;base64,${gradcam_image}`,
+      timestamp: new Date(),
+    };
+
+    conversation.messages.push(botMessage);
+    await conversation.save();
+
+    res.status(200).json(response.data);
+  } catch (err) {
+    console.error("Error in predictImage controller:", err.message);
+    res.status(500).json({ error: "Error processing the image" });
+  }
+};
+
+
+exports.getConversation = async (req, res) => {
+  try {
+    let userId = "guest_user"; 
+    const token = req.cookies?.token;
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (decoded.userId) userId = decoded.userId;
+      } catch (err) {
+        console.log("Invalid token, using guest user");
+      }
     }
 
-    return res.status(500).json({ error: "Error connecting to Flask API" });
+    const model_id = req.query.model || "brain"; 
+
+    const conversation = await Conversation.findOne({ userId, model_id }).sort({ createdAt: -1 });
+
+    if (!conversation) {
+      return res.status(404).json({ message: "No conversation found" });
+    }
+
+    res.status(200).json(conversation);
+  } catch (err) {
+    console.error("Error fetching conversation:", err.message);
+    res.status(500).json({ error: "Error fetching conversation" });
   }
 };
