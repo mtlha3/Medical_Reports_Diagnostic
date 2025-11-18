@@ -173,28 +173,47 @@ exports.predictImage = async (req, res) => {
 
 exports.getConversation = async (req, res) => {
   try {
-    let userId = "guest_user"; 
     const token = req.cookies?.token;
-    if (token) {
-      try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        if (decoded.userId) userId = decoded.userId;
-      } catch (err) {
-        console.log("Invalid token, using guest user");
-      }
+
+    if (!token) {
+      return res.status(200).json({
+        messages: [],
+        info: "Guest user - conversation not loaded",
+      });
     }
 
-    const model_id = req.query.model || "brain"; 
-
-    const conversation = await Conversation.findOne({ userId, model_id }).sort({ createdAt: -1 });
-
-    if (!conversation) {
-      return res.status(404).json({ message: "No conversation found" });
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(200).json({
+        messages: [],
+        info: "Invalid token - conversation not loaded",
+      });
     }
 
-    res.status(200).json(conversation);
+    const userId = decoded.userId;
+    const modelId = req.query.model;
+
+    if (!modelId) {
+      return res.status(400).json({ error: "Model ID required" });
+    }
+
+    const convo = await Conversation.findOne({
+      userId,
+      model_id: modelId,
+    }).sort({ createdAt: -1 });
+
+    if (!convo) {
+      return res.status(200).json({
+        messages: [],
+        info: "No conversation found for this user/model",
+      });
+    }
+
+    res.status(200).json(convo);
   } catch (err) {
-    console.error("Error fetching conversation:", err.message);
-    res.status(500).json({ error: "Error fetching conversation" });
+    console.error("Fetch conversation error:", err);
+    res.status(500).json({ error: "Server error fetching conversation" });
   }
 };
