@@ -5,6 +5,7 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const blogRoutes = require("./routes/blogRoutes");
 const Brain_MRIRoutes = require("./routes/Brain_MRIRoutes");
+const Lungs_Xrays = require("./routes/Lungs_Xray_Route");
 
 dotenv.config();
 connectDB();
@@ -21,6 +22,7 @@ app.use(cors({
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/blogs", blogRoutes);
 app.use("/api", Brain_MRIRoutes );
+app.use("/api", Lungs_Xrays );
 
 
 const PORT = process.env.PORT || 5000;

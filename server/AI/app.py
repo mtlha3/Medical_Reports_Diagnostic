@@ -2,11 +2,13 @@ from flask import Flask, request, send_file, jsonify, Response
 import numpy as np
 import cv2
 from io import BytesIO
+import os
 from PIL import Image
 from controllers.brainMRIController import predict_mri
 from controllers.gradcam_controller import predict_and_gradcam
 import base64
 import json
+from controllers.Lungs import predict_lungs, generate_gradcam_images
 
 app = Flask(__name__)
 
@@ -99,6 +101,28 @@ def predict_full():
 #     response.headers["X-Prediction-Report"] = json.dumps(report)
 
 #     return response
+
+@app.route("/predict-lungs", methods=["POST"])
+def predict_lungs_route():
+    if "image" not in request.files:
+        return jsonify({"error": "Image file missing"}), 400
+
+    img_bytes = request.files["image"].read()
+
+    preds, labels, raw_img, report = predict_lungs(img_bytes, threshold=0.001)
+
+    gradcams = {}
+    if labels:
+        gradcams = generate_gradcam_images(img_bytes, labels)
+
+    return jsonify({
+        "labels": labels,
+        "report": report,
+        "gradcam_images": gradcams
+    })
+
+
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
