@@ -52,12 +52,11 @@ const upload = multer({ storage: multer.memoryStorage() });
 exports.uploadMiddleware = upload.single("image");
 
 const formatBrainReport = (api) => {
-  if (!api?.report?.report) return "⚠️ No response received.";
-
-  const r = api.report.report;
+  // Safely get the nested report object
+  const r = api?.report?.report || api?.report || {};
 
   const tumorType = r.predicted_tumor_type || "N/A";
-  const confidence = r.confidence || 0;
+  const confidence = typeof r.confidence === "number" ? r.confidence : 0;
   const size = r.tumor_size_cm2 || "N/A";
   const stage = r.stage || "N/A";
   const stageExplanation = r.stage_explanation || "No stage explanation available.";
@@ -65,8 +64,8 @@ const formatBrainReport = (api) => {
   const treatments =
     Array.isArray(r.treatments) && r.treatments.length > 0
       ? r.treatments
-        .map((t) => `| ${t.Stage} | ${t.Treatment} | ${t.Explanation} |`)
-        .join("\n")
+          .map((t) => `| ${t.Stage || "-"} | ${t.Treatment || "-"} | ${t.Explanation || "-"} |`)
+          .join("\n")
       : "No treatment data found.";
 
   return `
@@ -95,12 +94,13 @@ ${stageExplanation}
 `;
 };
 
+
 // ---------------- CONTROLLER FUNCTION ----------------
 exports.predictImage = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No image uploaded" });
 
-    let userId = "guest_user"; 
+    let userId = "guest_user";
     const token = req.cookies?.token;
     if (token) {
       try {
@@ -121,17 +121,11 @@ exports.predictImage = async (req, res) => {
     };
 
     let conversation = await Conversation.findOne({ userId, model_id }).sort({ createdAt: -1 });
-
     if (!conversation) {
-      conversation = new Conversation({
-        userId,
-        model_id,
-        messages: [userMessage],
-      });
+      conversation = new Conversation({ userId, model_id, messages: [userMessage] });
     } else {
       conversation.messages.push(userMessage);
     }
-
     await conversation.save();
 
     const form = new FormData();
@@ -142,28 +136,35 @@ exports.predictImage = async (req, res) => {
     });
 
     const flaskURL = "http://127.0.0.1:5000/predict_full";
-
     const response = await axios.post(flaskURL, form, {
       headers: form.getHeaders(),
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
     });
 
-    const { report, gradcam_image } = response.data;
-
-    const formattedReport = formatBrainReport(response.data);
+    const apiData = response.data;
+    const gradcam_image = apiData.gradcam_image || null;
+    const formattedReport = formatBrainReport(apiData);
 
     const botMessage = {
       type: "analysis",
       content: formattedReport,
-      image: `data:image/png;base64,${gradcam_image}`,
+      images: gradcam_image
+        ? [{ label: "Brain Tumor", src: `data:image/png;base64,${gradcam_image}` }]
+        : [],
+      gradcam_images: gradcam_image ? { "Brain Tumor": gradcam_image } : {},
+      labels: gradcam_image ? ["Brain Tumor"] : [],
       timestamp: new Date(),
     };
 
     conversation.messages.push(botMessage);
     await conversation.save();
 
-    res.status(200).json(response.data);
+    res.status(200).json({
+      report: formattedReport,
+      gradcam_images: botMessage.gradcam_images,
+      labels: botMessage.labels,
+    });
   } catch (err) {
     console.error("Error in predictImage controller:", err.message);
     res.status(500).json({ error: "Error processing the image" });
@@ -171,49 +172,50 @@ exports.predictImage = async (req, res) => {
 };
 
 
-exports.getConversation = async (req, res) => {
-  try {
-    const token = req.cookies?.token;
 
-    if (!token) {
-      return res.status(200).json({
-        messages: [],
-        info: "Guest user - conversation not loaded",
-      });
-    }
+    exports.getConversation = async (req, res) => {
+      try {
+        const token = req.cookies?.token;
 
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (err) {
-      return res.status(200).json({
-        messages: [],
-        info: "Invalid token - conversation not loaded",
-      });
-    }
+        if (!token) {
+          return res.status(200).json({
+            messages: [],
+            info: "Guest user - conversation not loaded",
+          });
+        }
 
-    const userId = decoded.userId;
-    const modelId = req.query.model;
+        let decoded;
+        try {
+          decoded = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (err) {
+          return res.status(200).json({
+            messages: [],
+            info: "Invalid token - conversation not loaded",
+          });
+        }
 
-    if (!modelId) {
-      return res.status(400).json({ error: "Model ID required" });
-    }
+        const userId = decoded.userId;
+        const modelId = req.query.model;
 
-    const convo = await Conversation.findOne({
-      userId,
-      model_id: modelId,
-    }).sort({ createdAt: -1 });
+        if (!modelId) {
+          return res.status(400).json({ error: "Model ID required" });
+        }
 
-    if (!convo) {
-      return res.status(200).json({
-        messages: [],
-        info: "No conversation found for this user/model",
-      });
-    }
+        const convo = await Conversation.findOne({
+          userId,
+          model_id: modelId,
+        }).sort({ createdAt: -1 });
 
-    res.status(200).json(convo);
-  } catch (err) {
-    console.error("Fetch conversation error:", err);
-    res.status(500).json({ error: "Server error fetching conversation" });
-  }
-};
+        if (!convo) {
+          return res.status(200).json({
+            messages: [],
+            info: "No conversation found for this user/model",
+          });
+        }
+
+        res.status(200).json(convo);
+      } catch (err) {
+        console.error("Fetch conversation error:", err);
+        res.status(500).json({ error: "Server error fetching conversation" });
+      }
+    };

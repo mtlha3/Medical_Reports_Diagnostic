@@ -120,7 +120,87 @@ ${stageExplanation}
 `;
   };
 
-const handleSendMessage = async () => {
+
+
+  const formatLungsReport = (api) => {
+    if (!api?.report) return "⚠️ No report received.";
+
+    return api.report;
+  };
+
+
+  // const handleSendMessage = async () => {
+  //   if (!selectedImage) return;
+
+  //   const userMessage = {
+  //     id: Date.now(),
+  //     type: "user",
+  //     content: "Uploaded Image",
+  //     image: selectedImage,
+  //     timestamp: new Date(),
+  //   };
+
+  //   setMessages((prev) => [...prev, userMessage]);
+  //   setIsLoading(true);
+
+  //   const formData = new FormData();
+  //   formData.append("image", fileInputRef.current.files[0]);
+  //   formData.append("model_id", modelId);
+
+  //   try {
+  //     let response;
+
+  //     // 🔥 AUTO-SWITCH API based on model
+  //     if (modelId === "chest") {
+  //       response = await api.post("/predict-lungs", formData, {
+  //         headers: { "Content-Type": "multipart/form-data" },
+  //       });
+  //     } else {
+  //       response = await api.post("/predict", formData, {
+  //         headers: { "Content-Type": "multipart/form-data" },
+  //       });
+  //     }
+
+  //     const data = response.data;
+
+  //     // ----------- FORMAT REPORT BASED ON MODEL -----------
+  //     let formatted;
+  //     if (modelId === "chest") {
+  //       formatted = formatLungsReport(data);
+  //     } else {
+  //       formatted = formatBrainReport(data);
+  //     }
+
+  //     // ----------- HANDLE MULTIPLE GRADCAM IMAGES -----------
+  //     if (data.gradcam_images) {
+  //       gradcamArray = Object.entries(data.gradcam_images).map(([label, b64]) => ({
+  //         label,
+  //         src: `data:image/png;base64,${b64}`,
+  //       }));
+  //     }
+
+
+  //     const botMessage = {
+  //       id: Date.now(),
+  //       type: "analysis",
+  //       content: formatted,
+  //       images: gradcamArray,
+  //       labels: data.labels || [],
+  //       timestamp: new Date(),
+  //     };
+
+  //     setMessages((prev) => [...prev, botMessage]);
+  //   } catch (error) {
+  //     console.error("API failed:", error);
+  //     alert("Analysis failed. Please try again.");
+  //   }
+
+  //   setSelectedImage(null);
+  //   setIsLoading(false);
+  // };
+
+
+  const handleSendMessage = async () => {
   if (!selectedImage) return;
 
   const userMessage = {
@@ -139,22 +219,47 @@ const handleSendMessage = async () => {
   formData.append("model_id", modelId);
 
   try {
-    const response = await api.post("/predict", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    let response;
 
-    const { report, gradcam_image } = response.data;
+    if (modelId === "chest") {
+      response = await api.post("/predict-lungs", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+    } else {
+      response = await api.post("/predict", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+    }
 
-    const resultMessage = {
+    const data = response.data;
+
+    let formatted;
+    if (modelId === "chest") {
+      formatted = formatLungsReport(data);
+    } else {
+      formatted = formatBrainReport(data);
+    }
+
+    // ---- FIXED GRADCAM CODE ----
+    let gradcamArray = [];
+
+    if (data.gradcam_images) {
+      gradcamArray = Object.entries(data.gradcam_images).map(([label, b64]) => ({
+        label,
+        src: `data:image/png;base64,${b64}`,
+      }));
+    }
+
+    const botMessage = {
       id: Date.now(),
       type: "analysis",
-      content: formatBrainReport(response.data),
-      image: `data:image/png;base64,${gradcam_image}`,
-      model: modelId,
+      content: formatted,
+      images: gradcamArray,
+      labels: data.labels || [],
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, resultMessage]);
+    setMessages((prev) => [...prev, botMessage]);
   } catch (error) {
     console.error("API failed:", error);
     alert("Analysis failed. Please try again.");
@@ -166,6 +271,7 @@ const handleSendMessage = async () => {
 
 
 
+
   const handleModelChange = (modelId) => {
     setSearchParams({ model: modelId })
   }
@@ -173,25 +279,25 @@ const handleSendMessage = async () => {
   const IconComponent = currentModel.icon
 
   useEffect(() => {
-  const fetchConversation = async () => {
-    try {
-      const response = await api.get(`/conversation?model=${modelId}`, {
-        withCredentials: true, 
-      });
+    const fetchConversation = async () => {
+      try {
+        const response = await api.get(`/conversation?model=${modelId}`, {
+          withCredentials: true,
+        });
 
-      if (response.data?.messages) {
-        setMessages(response.data.messages.map((msg) => ({
-          ...msg,
-          id: msg._id || Date.now() + Math.random(),
-        })));
+        if (response.data?.messages) {
+          setMessages(response.data.messages.map((msg) => ({
+            ...msg,
+            id: msg._id || Date.now() + Math.random(),
+          })));
+        }
+      } catch (err) {
+        console.log("No previous conversation or not logged in.", err);
       }
-    } catch (err) {
-      console.log("No previous conversation or not logged in.", err);
-    }
-  };
+    };
 
-  fetchConversation();
-}, [modelId]);
+    fetchConversation();
+  }, [modelId]);
 
 
   return (
@@ -341,17 +447,32 @@ const handleSendMessage = async () => {
                       : `bg-slate-800/80 border border-${currentModel.id}-400/30 text-slate-200`
                       }`}
                   >
+                    {/* User image */}
                     {message.image && (
                       <motion.img
                         src={message.image}
-                        alt="uploaded"
                         className="w-full h-48 object-contain rounded-lg mb-3 cursor-pointer"
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
                         onClick={() => setPreviewImage(message.image)}
                       />
-
                     )}
+
+                    {/* MULTIPLE GRADCAM IMAGES (CHEST XRAY) */}
+                    {message.images && Array.isArray(message.images) && message.images.length > 0 && (
+                      <div className="grid grid-cols-1 gap-4 mt-4">
+                        {message.images.map((img, index) => (
+                          <div key={index} className="border border-slate-700 rounded-lg p-3">
+                            <p className="text-cyan-300 text-sm font-semibold mb-2">{img.label}</p>
+                            <img
+                              src={img.src}
+                              alt={img.label}
+                              className="w-full h-48 object-contain rounded-md cursor-pointer"
+                              onClick={() => setPreviewImage(img.src)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     <div className="prose prose-invert max-w-none prose-headings:text-white prose-p:text-gray-200 prose-strong:text-white prose-table:border-collapse prose-table:w-full prose-th:border prose-th:border-gray-600 prose-td:border prose-td:border-gray-700 prose-th:bg-gray-800 prose-td:bg-gray-900 prose-tr:even:bg-gray-800 prose-tr:hover:bg-gray-700/50 p-4">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {message.content}

@@ -26,6 +26,7 @@
     "react-quill-new": "^3.6.0",
     "react-router-dom": "^7.9.5",
     "react-slick": "^0.31.0",
+    "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "slick-carousel": "^1.8.1",
     "sweetalert2": "^11.26.3"

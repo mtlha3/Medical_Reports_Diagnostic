@@ -10,9 +10,19 @@ const MessageSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  image: {
+  image: { 
     type: String,
   },
+  images: [ 
+    {
+      label: String,
+      src: String,
+    }
+  ],
+  gradcam_images: { 
+    type: mongoose.Schema.Types.Mixed,
+  },
+  labels: [String], 
   timestamp: {
     type: Date,
     default: Date.now,
